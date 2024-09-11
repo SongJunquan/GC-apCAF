@@ -1,0 +1,23 @@
+library(devtools)
+library(singleseqgset)
+h.human <- msigdbr(species="Homo sapiens",category="H")
+
+h.names <- unique(h.human$gs_name)
+
+h.sets <- vector("list",length=length(h.names))
+names(h.sets) <- h.names
+
+for (i in names(h.sets)) {
+  h.sets[[i]] <- pull(h.human[h.human$gs_name==i,"gene_symbol"])
+}
+sce = experiment.aggregate
+logfc.data <- logFC(cluster.ids=sce@meta.data$cell_type,expr.mat=sce@assays$RNA@scale.data)
+names(logfc.data)
+gse.res <- wmw_gsea(expr.mat=sce@assays$RNA@scale.data,cluster.cells=logfc.data[[1]],log.fc.cluster=logfc.data[[2]],gene.sets=h.sets)
+names(gse.res)
+res.stats <- gse.res[["GSEA_statistics"]]
+res.pvals <- gse.res[["GSEA_p_values"]]
+res.pvals <- apply(res.pvals,2,p.adjust,method="fdr") 
+res.stats[order(res.stats[,1],decreasing=TRUE)[1:10],] 
+res.pvals[order(res.stats[,1],decreasing=TRUE)[1:10],]
+pheatmap::pheatmap(res.stats,cluster_cols = F,cluster_rows = F)
