@@ -1,0 +1,44 @@
+library(Seurat)
+library(ggplot2)
+library(cowplot)
+library(Matrix)
+library(dplyr)
+library(ggsci)
+library(Nebulosa)
+experiment.aggregate=readRDS("CAF_merge.rds")
+experiment.aggregate <- subset(experiment.aggregate, 
+                               subset = 
+                                 nFeature_RNA > 200 & nFeature_RNA < 6000 &
+                                 nCount_RNA > 500 & nCount_RNA < 30000 &
+                                 percent.mt < 20)
+experiment.aggregate <- NormalizeData(experiment.aggregate, 
+                                      normalization.method = "LogNormalize",
+                                      scale.factor = 10000)
+experiment.aggregate <- FindVariableFeatures(experiment.aggregate, 
+                                             selection.method = "vst",
+                                             nfeatures = 2000)
+experiment.aggregate <- ScaleData(
+  object = experiment.aggregate,
+  do.scale = FALSE,
+  do.center = FALSE,
+  vars.to.regress = c("orig.ident"))
+experiment.aggregate <- RunPCA(object = experiment.aggregate, 
+                               features = VariableFeatures(experiment.aggregate),
+                               verbose = F,npcs = 50)
+experiment.aggregate <- FindNeighbors(experiment.aggregate, dims = 1:20)
+experiment.aggregate <- FindClusters(experiment.aggregate, resolution = 0.6)
+experiment.aggregate <- RunUMAP(experiment.aggregate, dims = 1:20, 
+                                do.fast = TRUE)
+DimPlot(object = experiment.aggregate, pt.size=0.5,label = T)
+all.markers <- FindAllMarkers(experiment.aggregate, only.pos = TRUE, 
+                              min.pct = 0.3, logfc.threshold = 0.25)
+marker.sig <- all.markers %>% 
+  mutate(Ratio = round(pct.1/pct.2,3)) %>%
+  filter(p_val_adj <= 0.05)
+top5 <- marker.sig %>% group_by(cluster) %>% 
+  top_n(n = 5, wt = avg_log2FC)
+DoHeatmap(experiment.aggregate, features =unique(top5$gene),size = 2) +
+  theme(legend.position = "none", 
+        axis.text.y = element_text(size = 6))
+DotPlot(experiment.aggregate, features = unique(top5$gene))+
+  RotatedAxis()
